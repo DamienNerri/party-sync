@@ -34,6 +34,16 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .sw button{aspect-ratio:1;border-radius:50%;border:2px solid rgba(255,255,255,.16);cursor:pointer;padding:0;min-height:44px}
 .sw button:active{transform:scale(.92)}
 input[type=range]{width:100%;accent-color:var(--c);min-height:32px}
+.mix{display:grid;grid-template-columns:88px minmax(0,1fr);gap:14px;align-items:center}
+.prev{width:88px;height:88px;border-radius:22px;background:var(--c);box-shadow:0 0 26px rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.14)}
+input.hue{-webkit-appearance:none;appearance:none;height:30px;border-radius:15px;background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+input.hue::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:30px;height:30px;border-radius:50%;background:#fff;border:3px solid #0b0b12;box-shadow:0 1px 6px rgba(0,0,0,.6)}
+input.hue::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;border:3px solid #0b0b12}
+.pickwrap{display:inline-flex;align-items:center;gap:8px}
+.pickwrap input[type=color]{width:34px;height:34px}
+.sw.mine button{position:relative}
+.sw.editing button::after{content:"✕";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:700;text-shadow:0 1px 3px #000;background:rgba(0,0,0,.35);border-radius:50%}
+h2.mt{margin-top:16px}
 input[type=color]{width:56px;height:46px;border:0;background:none;padding:0;cursor:pointer}
 input[type=text],select{min-height:44px;border-radius:12px;border:1px solid var(--line);background:#0d0d14;padding:8px 10px;font-size:16px}
 label{display:block;font-size:15px;color:var(--muted);margin:10px 0 2px}
@@ -96,7 +106,31 @@ pre{white-space:pre-wrap;word-break:break-all;font:12.5px/1.45 ui-monospace,Menl
 <section>
   <h2>Couleur, partout en même temps</h2>
   <div class="sw" id="sw"></div>
-  <div class="row"><input type="color" id="pick" value="#9600ff" aria-label="Autre couleur"><button class="chip" id="rand" type="button">Aléatoire</button></div>
+  <div class="row"><button class="chip" id="rand" type="button">Aléatoire</button></div>
+</section>
+
+<section>
+  <h2>Couleur perso</h2>
+  <div class="mix">
+    <div class="prev" id="prev" role="img" aria-label="Aperçu de la couleur perso"></div>
+    <div>
+      <label for="hue">Teinte</label>
+      <input type="range" class="hue" id="hue" min="0" max="359" value="275">
+      <label for="sat">Saturation <b id="satv">100</b> %</label>
+      <input type="range" id="sat" min="0" max="100" value="100">
+      <label for="val">Luminosité <b id="valv">100</b> %</label>
+      <input type="range" id="val" min="5" max="100" value="100">
+    </div>
+  </div>
+  <p class="hint">Les lumières suivent en direct pendant que tu bouges les curseurs.</p>
+  <div class="row">
+    <button class="chip" id="save" type="button">★ Enregistrer cette couleur</button>
+    <label class="chip pickwrap">Palette <input type="color" id="pick" value="#9600ff" aria-label="Palette de couleurs du téléphone"></label>
+  </div>
+  <h2 class="mt">Mes couleurs</h2>
+  <div class="sw mine" id="mine"></div>
+  <p class="hint" id="mineHint">Règle une couleur puis touche « Enregistrer » : elle apparaîtra ici. Touche-la ensuite pour l'envoyer.</p>
+  <div class="row"><button class="chip" id="edit" type="button" hidden>Supprimer des couleurs</button></div>
 </section>
 
 <section>
@@ -105,6 +139,7 @@ pre{white-space:pre-wrap;word-break:break-all;font:12.5px/1.45 ui-monospace,Menl
   <label for="iv">Nouvelle couleur toutes les <b id="ivv">3</b> s</label>
   <input type="range" id="iv" min="0.5" max="15" step="0.5" value="3">
   <label class="inline"><input type="checkbox" id="shuf"> Ordre aléatoire</label>
+  <label class="inline"><input type="checkbox" id="useMine"> Avec mes couleurs (sinon l'arc-en-ciel)</label>
   <label class="inline"><input type="checkbox" id="beat"> Sur le rythme (micro du téléphone, posé près de l'enceinte)</label>
   <label for="sens">Sensibilité au rythme</label>
   <input type="range" id="sens" min="1.1" max="3" step="0.1" value="1.6" aria-describedby="senshint">
@@ -420,10 +455,12 @@ async function nextColor() {
   if (party.busy || !all().some(d => d.connected)) return;   // personne à éclairer : on attend
   party.busy = true;
   try {
+    const pal = partyPalette();
     let rgb;
-    if ($('#shuf').checked) { do { rgb = PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)]; } while (rgb === party.prev); }
-    else rgb = PARTY_COLORS[party.i++ % PARTY_COLORS.length];
-    party.prev = rgb;
+    if ($('#shuf').checked) { do { rgb = pal[Math.floor(Math.random() * pal.length)]; } while (pal.length > 1 && hex(rgb) === party.prev); }
+    else rgb = pal[party.i++ % pal.length];
+    party.prev = hex(rgb);
+    showSliders(rgb);
     const res = await setColor(rgb);
     if (party.on) msg(summary('Fête ' + hex(rgb), res));
   } finally { party.busy = false; }
@@ -557,10 +594,81 @@ function noBluetoothText() {
 $('#sw').innerHTML = COLORS.map(([n, c]) => `<button type="button" style="background:${hex(c)}" title="${n}" aria-label="${n}" data-c="${hex(c)}"></button>`).join('');
 $('#pat').innerHTML = PATTERNS.map(([, label, p]) => `<button class="chip" type="button" data-p="${p}">${label}</button>`).join('');
 const fromHex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-async function doColor(rgb) { stopParty(); msg(summary('Couleur ' + hex(rgb), await setColor(rgb))); }
+async function doColor(rgb) { stopParty(); showSliders(rgb); msg(summary('Couleur ' + hex(rgb), await setColor(rgb))); }
 $('#sw').addEventListener('click', e => { const c = e.target.dataset.c; if (c) doColor(fromHex(c)); });
 $('#pick').addEventListener('change', e => doColor(fromHex(e.target.value)));
-$('#rand').addEventListener('click', () => doColor(PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)]));
+$('#rand').addEventListener('click', () => doColor(hsvToRgb(Math.random() * 360, 1, 1)));
+
+/* ---------- Couleur perso : curseurs en direct + couleurs enregistrées ---------- */
+function hsvToRgb(h, s, v) {   // h en degrés, s et v entre 0 et 1
+  const f = n => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return [f(5), f(3), f(1)].map(x => Math.round(x * 255));
+}
+function rgbToHsv([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d) { h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return [Math.round(h), max ? d / max : 0, max];
+}
+function sliderColor() { return hsvToRgb(Number($('#hue').value), Number($('#sat').value) / 100, Number($('#val').value) / 100); }
+function showSliders(rgb) {   // place les curseurs sur une couleur envoyée autrement
+  const [h, s, v] = rgbToHsv(rgb);
+  if (s > 0) $('#hue').value = h;
+  $('#sat').value = Math.round(s * 100);
+  $('#val').value = Math.max(5, Math.round(v * 100));
+  $('#satv').textContent = $('#sat').value; $('#valv').textContent = $('#val').value;
+  $('#prev').style.background = hex(rgb);
+}
+const live = {pending: null, sending: false};
+async function liveColor(rgb) {   // n'envoie que la dernière couleur : les appareils ne sont jamais débordés
+  live.pending = rgb;
+  if (live.sending) return;
+  live.sending = true;
+  try {
+    if (party.on) stopParty();
+    while (live.pending) { const c = live.pending; live.pending = null; const res = await setColor(c); msg(summary('Couleur ' + hex(c), res)); }
+  } finally { live.sending = false; }
+}
+for (const id of ['hue', 'sat', 'val']) $('#' + id).addEventListener('input', () => {
+  $('#satv').textContent = $('#sat').value; $('#valv').textContent = $('#val').value;
+  const rgb = sliderColor();
+  $('#prev').style.background = hex(rgb);
+  liveColor(rgb);
+});
+
+const MINE_KEY = 'partysync.mine';
+let mine = (() => { try { const a = JSON.parse(localStorage.getItem(MINE_KEY) || '[]'); return Array.isArray(a) ? a.filter(x => /^#[0-9A-F]{6}$/i.test(x)).slice(0, 18) : []; } catch (e) { return []; } })();
+let editing = false;
+function storeMine() { try { localStorage.setItem(MINE_KEY, JSON.stringify(mine)); } catch (e) {} }
+function renderMine() {
+  $('#mine').innerHTML = mine.map((c, i) => `<button type="button" style="background:${c}" data-i="${i}" aria-label="${editing ? 'Supprimer ' : ''}${c}"></button>`).join('');
+  $('#mine').classList.toggle('editing', editing);
+  $('#mineHint').hidden = mine.length > 0;
+  $('#edit').hidden = !mine.length;
+  $('#edit').textContent = editing ? 'Terminé' : 'Supprimer des couleurs';
+}
+function partyPalette() { return $('#useMine').checked && mine.length ? mine.map(fromHex) : PARTY_COLORS; }
+$('#save').addEventListener('click', () => {
+  const c = hex(show.color || sliderColor());
+  if (mine.includes(c)) { msg(`${c} est déjà dans tes couleurs.`); return; }
+  mine.push(c);
+  if (mine.length > 18) mine.shift();
+  editing = false; storeMine(); renderMine();
+  msg(`${c} enregistrée dans « Mes couleurs ».`);
+});
+$('#mine').addEventListener('click', e => {
+  const i = e.target.dataset.i;
+  if (i === undefined) return;
+  if (editing) {
+    const c = mine.splice(Number(i), 1)[0];
+    if (!mine.length) editing = false;
+    storeMine(); renderMine(); msg(`${c} supprimée.`);
+  } else doColor(fromHex(mine[Number(i)]));
+});
+$('#edit').addEventListener('click', () => { editing = !editing; renderMine(); });
+renderMine();
+$('#prev').style.background = hex(sliderColor());
 $('#pat').addEventListener('click', async e => {
   const p = e.target.dataset.p;
   if (p === undefined) return;

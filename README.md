@@ -26,7 +26,7 @@ Outil **non officiel**, sans lien avec JBL ou Harman. À utiliser à tes risques
 2. Touche **+ PartyLight** et choisis le stick, puis **+ Enceinte** et choisis la 310. Si un appareil n'apparaît pas dans la liste, coche « Montrer tous les appareils Bluetooth ».
 3. Touche une couleur : les deux la prennent en même temps. Le stick passe en motif « Perso » pour l'afficher. Si la couleur bouge encore, essaie le motif « Freeze ».
 
-Le **mode fête** change la couleur partout à intervalle régulier, ou sur les basses captées par le micro du téléphone. En bas de la page, le **journal** montre chaque trame envoyée (→) et reçue (←), et permet d'envoyer une trame brute.
+Dans **Couleur perso**, les curseurs teinte, saturation et luminosité changent la couleur en direct, et **★ Enregistrer** garde la couleur dans « Mes couleurs » sur ce téléphone. Le **mode fête** change la couleur partout à intervalle régulier, ou sur les basses captées par le micro du téléphone. Coche « Avec mes couleurs » pour qu'il n'utilise que tes couleurs enregistrées. En bas de la page, le **journal** montre chaque trame envoyée (→) et reçue (←), et permet d'envoyer une trame brute.
 
 ### Où ouvrir la page
 
