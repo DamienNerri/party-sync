@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#08080d">
+<title>Party Sync</title>
+<style>
+/* VOICE: une soirée, de nuit ; des commandes nettes et grosses sous le pouce
+   IDEA: la console lumière d'un DJ : la scène en haut, les deux lumières allumées de la même couleur
+   PICTURE: l'enceinte (anneaux lumineux) et le stick, éclairés avec la couleur envoyée
+   COLOUR and TYPE: scène presque noire, la couleur choisie comme seul accent ; police système
+   LAYOUT: une colonne, scène puis réglages, 44 px minimum par bouton */
+:root{--bg:#08080d;--card:#13131c;--chip:#22222f;--line:#2c2c3c;--ink:#f3f3f8;--muted:#a3a3ba;--c:rgb(150,0,255);--ok:#36d07a;--bad:#ff5a5a;color-scheme:dark}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+body{margin:0 auto;max-width:560px;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:14px 14px 92px;overflow-x:clip}
+h1{font-size:32px;line-height:1.05;margin:6px 0 2px;letter-spacing:-.01em}
+.sub{margin:0 0 12px;color:var(--muted);font-size:15px}
+h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600}
+section{background:var(--card);border-radius:18px;padding:14px;margin-bottom:12px}
+.warn{background:#3a1420;border:1px solid #6b2234;color:#ffd9e0;border-radius:14px;padding:12px 14px;margin-bottom:12px;font-size:15px}
+.stage{padding:0;overflow:hidden;background:radial-gradient(120% 90% at 50% 100%,color-mix(in srgb,var(--c) 22%,transparent),transparent 70%),#0b0b12}
+.stage svg{display:block;width:100%;height:auto;color:var(--c);transition:color .25s}
+.ring{stroke:currentColor}.lit{fill:currentColor}
+#gbox.off,#glight.off{opacity:.22}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+button,select,input{font:inherit;color:inherit}
+.big{flex:1 1 140px;min-height:52px;padding:12px 14px;border-radius:14px;border:0;font-weight:650;background:var(--chip);cursor:pointer}
+.primary{background:var(--c);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45)}
+.chip{min-height:44px;padding:10px 14px;border-radius:12px;border:0;background:var(--chip);cursor:pointer}
+.chip.sel{outline:2px solid var(--c);outline-offset:1px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.sw{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.sw button{aspect-ratio:1;border-radius:50%;border:2px solid rgba(255,255,255,.16);cursor:pointer;padding:0;min-height:44px}
+.sw button:active{transform:scale(.92)}
+input[type=range]{width:100%;accent-color:var(--c);min-height:32px}
+input[type=color]{width:56px;height:46px;border:0;background:none;padding:0;cursor:pointer}
+input[type=text],select{min-height:44px;border-radius:12px;border:1px solid var(--line);background:#0d0d14;padding:8px 10px;font-size:16px}
+label{display:block;font-size:15px;color:var(--muted);margin:10px 0 2px}
+label.inline{display:flex;gap:10px;align-items:center;margin:8px 0 0;min-height:36px}
+label.inline input{width:20px;height:20px;accent-color:var(--c)}
+.hint{font-size:14px;color:var(--muted);margin:8px 0 0}
+.devs{display:grid;gap:8px}
+.dev{display:flex;align-items:center;gap:10px;background:#0d0d14;border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 12px}
+.dev .who{flex:1}.dev small{display:block;color:var(--muted);font-size:13px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;background:var(--bad)}.dot.on{background:var(--ok)}.dot.mute{background:#e8b13a}
+.dev button{min-width:44px;min-height:44px;border:0;border-radius:12px;background:var(--chip);cursor:pointer}
+.empty{color:var(--muted);font-size:15px;margin:0}
+details{background:var(--card);border-radius:18px;padding:12px 14px;margin-top:12px}
+summary{cursor:pointer;color:var(--muted);font-weight:600;min-height:32px}
+pre{white-space:pre-wrap;word-break:break-all;font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;color:#c9c9de;max-height:300px;overflow:auto;margin:10px 0 0}
+#msg{position:fixed;left:12px;right:12px;bottom:12px;max-width:536px;margin:0 auto;background:#20202d;border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14.5px;color:#dcdcee;min-height:46px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+@media (prefers-reduced-motion:reduce){.stage svg{transition:none}.sw button:active{transform:none}}
+</style>
+</head>
+<body>
+<h1>Party Sync</h1>
+<p class="sub">JBL PartyBox 310 et PartyLight sur les mêmes couleurs, depuis ce téléphone. Outil non officiel.</p>
+<div id="warn" class="warn" hidden></div>
+
+<section class="stage" aria-label="Aperçu des lumières">
+  <svg viewBox="0 0 360 210" role="img" aria-label="L'enceinte et le stick, éclairés de la couleur envoyée">
+    <defs>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <linearGradient id="tube" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".45" stop-color="#fff" stop-opacity=".45"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    </defs>
+    <ellipse cx="180" cy="196" rx="150" ry="10" class="lit" opacity=".28" filter="url(#glow)"/>
+    <g id="gbox" class="off">
+      <rect x="62" y="16" width="136" height="178" rx="16" fill="#1a1a25" stroke="#30303f" stroke-width="2"/>
+      <rect x="62" y="16" width="136" height="20" rx="10" fill="#22222f"/>
+      <circle cx="130" cy="78" r="36" fill="#0c0c12"/><circle cx="130" cy="78" r="39" class="ring" fill="none" stroke-width="5" filter="url(#glow)"/>
+      <circle cx="130" cy="78" r="13" fill="#262634"/>
+      <circle cx="130" cy="148" r="30" fill="#0c0c12"/><circle cx="130" cy="148" r="33" class="ring" fill="none" stroke-width="5" filter="url(#glow)"/>
+      <circle cx="130" cy="148" r="11" fill="#262634"/>
+      <rect x="86" y="113" width="88" height="5" rx="2.5" class="lit" filter="url(#glow)"/>
+    </g>
+    <g id="glight" class="off">
+      <rect x="252" y="12" width="26" height="174" rx="13" class="lit" filter="url(#glow)"/>
+      <rect x="252" y="12" width="26" height="174" rx="13" fill="url(#tube)"/>
+      <rect x="243" y="184" width="44" height="12" rx="6" fill="#2a2a38"/>
+    </g>
+  </svg>
+</section>
+
+<section>
+  <h2>Appareils</h2>
+  <div id="devs" class="devs"><p class="empty">Aucun appareil pour l'instant.</p></div>
+  <div class="row">
+    <button class="big" id="addBox" type="button">+ Enceinte</button>
+    <button class="big" id="addLight" type="button">+ PartyLight</button>
+  </div>
+  <label class="inline"><input type="checkbox" id="all"> Montrer tous les appareils Bluetooth (si le tien n'apparaît pas dans la liste)</label>
+  <p class="hint">Ferme d'abord complètement l'appli JBL PartyBox : chaque appareil n'accepte qu'une connexion de contrôle. La musique, elle, peut continuer.</p>
+</section>
+
+<section>
+  <h2>Couleur, partout en même temps</h2>
+  <div class="sw" id="sw"></div>
+  <div class="row"><input type="color" id="pick" value="#9600ff" aria-label="Autre couleur"><button class="chip" id="rand" type="button">Aléatoire</button></div>
+</section>
+
+<section>
+  <h2>Mode fête</h2>
+  <div class="row"><button class="big primary" id="party" type="button">Lancer le mode fête</button></div>
+  <label for="iv">Nouvelle couleur toutes les <b id="ivv">3</b> s</label>
+  <input type="range" id="iv" min="0.5" max="15" step="0.5" value="3">
+  <label class="inline"><input type="checkbox" id="shuf"> Ordre aléatoire</label>
+  <label class="inline"><input type="checkbox" id="beat"> Sur le rythme (micro du téléphone, posé près de l'enceinte)</label>
+  <label for="sens">Sensibilité au rythme</label>
+  <input type="range" id="sens" min="1.1" max="3" step="0.1" value="1.6" aria-describedby="senshint">
+  <p class="hint" id="senshint">Vers la gauche : réagit à plus de coups. Vers la droite : seulement aux grosses basses.</p>
+</section>
+
+<section>
+  <h2>Motif d'animation (sur tous les appareils)</h2>
+  <div class="row" id="pat"></div>
+  <p class="hint">« Perso » affiche la couleur choisie. Si elle bouge encore, essaie « Freeze ».</p>
+</section>
+
+<section>
+  <h2>PartyLight : vitesse et intensité</h2>
+  <label for="sp">Vitesse <b id="spv">50</b></label><input type="range" id="sp" min="0" max="100" value="50">
+  <label for="in">Intensité <b id="inv">100</b></label><input type="range" id="in" min="0" max="100" value="100">
+</section>
+
+<section>
+  <h2>Enceinte</h2>
+  <div class="row"><button class="chip" data-strobe="1" type="button">Stroboscope ON</button><button class="chip" data-strobe="0" type="button">Stroboscope OFF</button></div>
+</section>
+
+<div class="row"><button class="big" id="on" type="button">Allumer</button><button class="big" id="off" type="button">Éteindre</button></div>
+
+<details>
+  <summary>Journal Bluetooth et envoi de trames</summary>
+  <div class="row"><select id="rawDev" aria-label="Appareil"></select><input type="text" id="rawHex" placeholder="aa 31 00" aria-label="Trame en hexadécimal" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="chip" id="rawSend" type="button">Envoyer</button></div>
+  <pre id="log"></pre>
+</details>
+
+<div id="msg" role="status" aria-live="polite">Prêt.</div>
+
+<script>
+{
+const SERVICE = '65786365-6c70-6f69-6e74-2e636f6d0000';
+const RX = '65786365-6c70-6f69-6e74-2e636f6d0001';
+const TX = '65786365-6c70-6f69-6e74-2e636f6d0002';
+const CUSTOM = 8, NEON = 2;
+const PATTERNS = [['neon', 'Neon', 2], ['loop', 'Loop', 9], ['bounce', 'Bounce', 10], ['trim', 'Trim', 11],
+                  ['switch', 'Switch', 12], ['freeze', 'Freeze', 13], ['custom', 'Perso', 8]];
+const PNAMES = {0: 'off', 1: 'rock', 2: 'neon', 3: 'club', 4: 'flow', 5: 'ripple', 6: 'cross', 7: 'flash',
+                8: 'perso', 9: 'loop', 10: 'bounce', 11: 'trim', 12: 'switch', 13: 'freeze'};
+const COLORS = [['rouge', [255, 0, 0]], ['orange', [255, 80, 0]], ['jaune', [255, 200, 0]], ['vert', [0, 255, 0]],
+                ['turquoise', [0, 255, 150]], ['cyan', [0, 255, 255]], ['bleu', [0, 0, 255]], ['indigo', [70, 0, 255]],
+                ['violet', [150, 0, 255]], ['magenta', [255, 0, 255]], ['rose', [255, 0, 110]], ['blanc', [255, 255, 255]]];
+const PARTY_COLORS = COLORS.filter(([n]) => n !== 'indigo' && n !== 'blanc').map(([, c]) => c);
+const STATUS = {ok: 'ok', rejected: 'refusé', no_ack: 'pas de réponse', offline: 'non connecté'};
+
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(Number(v) || 0)));
+const hex = c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+const toHex = b => Array.from(b, x => x.toString(16).padStart(2, '0')).join(' ');
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const txt = s => STATUS[s] || s;
+
+/* ---------- Protocole JBL : AA <cmd> <len> <données> ---------- */
+function frame(cmd, payload = []) { return new Uint8Array([0xAA, cmd, payload.length, ...payload]); }
+function lightSet(...tlvs) { const b = [0]; for (const [t, v] of tlvs) b.push(t, v.length, ...v); return frame(0x33, b); }
+const F = {
+  pattern: p => lightSet([0x31, [p]]),
+  color: c => lightSet([0x36, [1]], [0x32, c.map(v => clamp(v, 0, 255))]),
+  main: on => lightSet([0x99, [on ? 1 : 0]]),
+  strobe: on => lightSet([0x33, [on ? 1 : 0]]),
+  intensity: v => lightSet([0x45, [clamp(v, 0, 100)]]),
+  speed: v => lightSet([0x46, [clamp(v, 0, 100)]]),
+  device: () => frame(0x11), light: () => frame(0x31), heartbeat: () => frame(0xEA),
+};
+function tlv(p) { const o = {}; let i = 1; while (i + 2 <= p.length) { const t = p[i], n = p[i + 1]; o[t] = p.slice(i + 2, i + 2 + n); i += 2 + n; } return o; }
+const LTAGS = {0x31: 'motif', 0x32: 'couleur', 0x33: 'strobo', 0x36: 'perso', 0x38: 'anneau', 0x39: 'points',
+               0x44: 'bandes', 0x45: 'intensité', 0x46: 'vitesse', 0x4a: 'motifs', 0x99: 'interrupteur'};
+function lightText(p) {
+  return Object.entries(tlv(p)).map(([t, v]) => {
+    t = Number(t);
+    let s;
+    if (t === 0x31 && v.length === 1) s = PNAMES[v[0]] ?? v[0];
+    else if (t === 0x32 && v.length === 3) s = hex(v);
+    else if (t === 0x4a) s = v.map(x => PNAMES[x] ?? x).join(',');
+    else s = v.length === 1 ? v[0] : toHex(v);
+    return `${LTAGS[t] || 'tag ' + t.toString(16)}=${s}`;
+  }).join(', ');
+}
+function rxText(cmd, p) {
+  if (cmd === 0 && p.length >= 2) return `accusé ${p[0].toString(16)} : ${p[1] === 0 ? 'ok' : p[1] === 255 ? 'refusé' : 'statut ' + p[1]}`;
+  if (cmd === 0x32) return 'état lumière : ' + lightText(p);
+  if (cmd === 0x12) return 'infos appareil';
+  if (cmd === 0xEA) return 'battement';
+  return 'commande ' + cmd.toString(16);
+}
+function txText(b) {
+  if (b[1] === 0x33) return lightText(Array.from(b.slice(3)));
+  return {0x11: "demande d'infos", 0x31: "demande d'état lumière", 0xEA: 'battement'}[b[1]] || '';
+}
+
+class FrameReader {
+  constructor() { this.buf = []; this.last = 0; }
+  feed(bytes) {
+    const now = performance.now(), out = [];
+    if (this.buf.length && now - this.last > 600) {   // trame tronquée : on garde ce qui est arrivé
+      if (this.buf[0] === 0xAA && this.buf.length >= 3) out.push([this.buf[1], this.buf.slice(3)]);
+      this.buf = [];
+    }
+    this.last = now;
+    this.buf.push(...bytes);
+    while (this.buf.length) {
+      if (this.buf[0] !== 0xAA) { const i = this.buf.indexOf(0xAA); if (i < 0) { this.buf = []; break; } this.buf.splice(0, i); }
+      if (this.buf.length < 3) break;
+      const cmd = this.buf[1];
+      let n, start;
+      if (cmd >= 0xE1 && cmd <= 0xE3) { if (this.buf.length < 4) break; n = (this.buf[2] << 8) | this.buf[3]; start = 4; }
+      else { n = this.buf[2]; start = 3; }
+      if (this.buf.length < start + n) break;
+      out.push([cmd, this.buf.slice(start, start + n)]);
+      this.buf.splice(0, start + n);
+    }
+    return out;
+  }
+}
+
+/* ---------- Journal et messages ---------- */
+const logLines = [];
+function log(line) {
+  logLines.push(new Date().toTimeString().slice(0, 8) + '  ' + line);
+  if (logLines.length > 300) logLines.shift();
+  $('#log').textContent = logLines.join('\n');
+}
+function msg(t) { $('#msg').textContent = t; }
+function explain(e) {
+  if (!e) return 'erreur inconnue';
+  if (e.name === 'NetworkError') return "liaison refusée : ferme l'appli JBL et rapproche-toi";
+  if (e.name === 'NotFoundError') return "le service de contrôle JBL n'est pas là : est-ce le bon appareil ?";
+  if (e.name === 'SecurityError') return 'Bluetooth bloqué par le navigateur sur cette page';
+  return e.message || String(e);
+}
+
+/* ---------- Un appareil connecté ---------- */
+class Dev {
+  constructor(bt, kind) {
+    this.bt = bt; this.kind = kind;
+    this.name = bt.name || (kind === 'box' ? 'PartyBox' : 'PartyLight');
+    this.label = this.name;
+    this.connected = false; this.awake = false; this.removed = false; this.reconnecting = false;
+    this.state = {}; this.waiters = []; this.queue = Promise.resolve();
+    this.reader = new FrameReader(); this.tx = null; this.withResp = true; this.hb = null;
+    bt.addEventListener('gattserverdisconnected', () => this.onDisconnect());
+  }
+  async connect() {
+    log(`${this.label} : connexion…`);
+    const server = await this.bt.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE);
+    const tx = await service.getCharacteristic(TX);
+    let rx = null;
+    try { rx = await service.getCharacteristic(RX); } catch (e) { /* certains modèles notifient sur TX */ }
+    const notif = rx && (rx.properties.notify || rx.properties.indicate) ? rx : tx;
+    this.tx = tx;
+    this.withResp = !!tx.properties.write;
+    this.reader = new FrameReader();
+    this.waiters = [];
+    if (notif.properties.notify || notif.properties.indicate) {
+      try {
+        notif.addEventListener('characteristicvaluechanged', e => this.onData(e.target.value));
+        await notif.startNotifications();
+      } catch (e) { log(`${this.label} : notifications indisponibles (${explain(e)})`); }
+    }
+    this.connected = true; this.state = {};
+    this.awake = await this.wake();
+    clearInterval(this.hb);
+    this.hb = setInterval(() => { if (this.connected) this.exchange(F.heartbeat()).catch(() => {}); }, 5000);
+    render();
+    return this.awake;
+  }
+  async wake() {   // la 310 ignore les premières commandes après la connexion
+    for (let i = 0; i < 8; i++) {
+      let r = null;
+      try { r = await this.exchange(F.device(), () => true, 1000); } catch (e) { return false; }
+      if (r) { await sleep(300); return true; }
+      if (!this.connected) break;
+    }
+    return false;
+  }
+  onData(dv) {
+    const bytes = Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
+    for (const [cmd, p] of this.reader.feed(bytes)) {
+      log(`← ${this.label} : ${toHex(frame(cmd, p))}   ${rxText(cmd, p)}`);
+      const i = this.waiters.findIndex(w => w.match(cmd, p));
+      if (i >= 0) this.waiters.splice(i, 1)[0].resolve([cmd, p]);
+    }
+  }
+  onDisconnect() {
+    clearInterval(this.hb);
+    const was = this.connected;
+    this.connected = false; this.awake = false;
+    for (const w of this.waiters.splice(0)) w.resolve(null);
+    render();
+    if (was && !this.removed) { log(`${this.label} : déconnecté`); msg(`${this.label} s'est déconnecté, je réessaie…`); this.retry(); }
+  }
+  async retry() {
+    if (this.reconnecting) return;
+    this.reconnecting = true;
+    try {
+      for (let wait = 2000; !this.connected && !this.removed; wait = Math.min(wait * 1.5, 10000)) {
+        await sleep(wait);
+        if (this.removed) break;
+        try { await this.connect(); msg(`${this.label} reconnecté.`); if (show.color) await setColor(show.color, null, [this]); }
+        catch (e) { log(`${this.label} : reconnexion ratée (${explain(e)})`); }
+      }
+    } finally { this.reconnecting = false; }
+  }
+  forget() { this.removed = true; clearInterval(this.hb); try { this.bt.gatt.disconnect(); } catch (e) {} this.connected = false; }
+  enqueue(fn) { const run = this.queue.then(fn, fn); this.queue = run.catch(() => {}); return run; }
+  write(bytes) {
+    if (!this.connected || !this.tx) throw new Error('non connecté');
+    log(`→ ${this.label} : ${toHex(bytes)}   ${txText(bytes)}`);
+    if (this.withResp && this.tx.writeValueWithResponse) return this.tx.writeValueWithResponse(bytes);
+    if (!this.withResp && this.tx.writeValueWithoutResponse) return this.tx.writeValueWithoutResponse(bytes);
+    return this.tx.writeValue(bytes);
+  }
+  exchange(bytes, match = null, timeout = 1500) {   // une trame à la fois par appareil
+    return this.enqueue(async () => {
+      let w = null, reply = null;
+      if (match) reply = new Promise(res => { w = {match, resolve: res}; this.waiters.push(w); });
+      try {
+        await this.write(bytes);
+        if (!reply) return null;
+        return await Promise.race([reply, sleep(timeout).then(() => null)]);
+      } finally {
+        if (w) { const i = this.waiters.indexOf(w); if (i >= 0) this.waiters.splice(i, 1); }
+        await sleep(60);
+      }
+    });
+  }
+  async command(bytes) {
+    const cmd = bytes[1];
+    try {
+      const r = await this.exchange(bytes, (c, p) => c === 0 && p.length >= 2 && p[0] === cmd);
+      if (!r) return this.connected ? 'no_ack' : 'offline';
+      return r[1][1] === 0 ? 'ok' : 'rejected';
+    } catch (e) { return this.connected ? 'erreur : ' + explain(e) : 'offline'; }
+  }
+}
+
+/* ---------- Le chef d'orchestre : même commande, même moment, partout ---------- */
+const show = {box: null, lights: [], pattern: null, color: null, on: true};
+const all = () => [show.box, ...show.lights].filter(Boolean);
+
+async function each(fn, list = all()) {
+  return Promise.all(list.map(async d => [d, d.connected ? await fn(d).catch(e => 'erreur : ' + explain(e)) : 'offline']));
+}
+function combine(steps) {
+  const bad = steps.filter(([, s]) => s !== 'ok');
+  if (!bad.length) return 'ok';
+  if (steps.length === 1) return steps[0][1];
+  return bad.map(([l, s]) => `${l} ${txt(s)}`).join(', ');
+}
+async function ensurePattern(d, p) {
+  if (d.state.pattern === p) return 'ok';
+  const s = await d.command(F.pattern(p));
+  if (s === 'ok' || s === 'no_ack') d.state.pattern = p;
+  return s;
+}
+async function setColor(rgb, pattern = null, list = all()) {
+  const p = pattern ?? show.pattern;
+  if (pattern !== null) show.pattern = pattern;
+  show.color = rgb; show.on = true;
+  paintStage(rgb);
+  return each(async d => {
+    const steps = [];
+    if (p !== null) steps.push(['motif', await ensurePattern(d, p)]);
+    else if (d.kind === 'light') steps.push(['motif', await ensurePattern(d, CUSTOM)]);  // le stick affiche une couleur choisie en « Perso »
+    steps.push(['couleur', await d.command(F.color(rgb))]);
+    d.state.color = rgb;
+    return combine(steps);
+  }, list);
+}
+async function setPattern(p) {
+  show.pattern = p; show.on = true;
+  return each(async d => {
+    const s = await d.command(F.pattern(p));
+    if (s === 'ok' || s === 'no_ack') d.state.pattern = p;
+    return s;
+  });
+}
+async function power(on) {
+  show.on = on;
+  return each(async d => {
+    const steps = [];
+    if (d.kind === 'box') steps.push(['interrupteur', await d.command(F.main(on))]);  // modèles récents
+    if (on) {
+      const p = show.pattern ?? d.state.beforeOff ?? (d.kind === 'light' && show.color ? CUSTOM : NEON);
+      const s = await d.command(F.pattern(p));
+      steps.push(['motif', s]);
+      if (s === 'ok' || s === 'no_ack') d.state.pattern = p;
+      if (show.color && (d.kind === 'box' || p === CUSTOM)) steps.push(['couleur', await d.command(F.color(show.color))]);
+    } else {
+      if (d.state.pattern) d.state.beforeOff = d.state.pattern;
+      steps.push(['motif', await d.command(F.pattern(0))]);  // anciens modèles (310) : motif 0 = éteint
+      d.state.pattern = 0;
+    }
+    if (d.kind === 'box' && steps.slice(0, 2).some(([, s]) => s === 'ok')) return 'ok';
+    return combine(steps);
+  });
+}
+function summary(title, res) {
+  if (!res.length) return `${title} : aucun appareil. Ajoute l'enceinte et/ou le PartyLight.`;
+  return `${title} → ` + res.map(([d, s]) => `${d.label} : ${txt(s)}`).join(' · ');
+}
+
+/* ---------- Mode fête ---------- */
+const party = {on: false, timer: null, i: 0, prev: null, busy: false, beats: 0};
+let wakeLock = null;
+async function nextColor() {
+  if (party.busy || !all().some(d => d.connected)) return;   // personne à éclairer : on attend
+  party.busy = true;
+  try {
+    let rgb;
+    if ($('#shuf').checked) { do { rgb = PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)]; } while (rgb === party.prev); }
+    else rgb = PARTY_COLORS[party.i++ % PARTY_COLORS.length];
+    party.prev = rgb;
+    const res = await setColor(rgb);
+    if (party.on) msg(summary('Fête ' + hex(rgb), res));
+  } finally { party.busy = false; }
+}
+async function tick() {
+  if (!party.on) return;
+  await nextColor();
+  if (party.on && !beat) party.timer = setTimeout(tick, Number($('#iv').value) * 1000);
+}
+function startParty() {
+  if (!all().some(d => d.connected)) { msg("Ajoute d'abord l'enceinte et/ou le PartyLight, puis lance le mode fête."); return; }
+  party.on = true; party.i = 0; clearTimeout(party.timer);
+  try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; }).catch(() => {}); } catch (e) {}
+  tick(); render();
+}
+function stopParty() {
+  party.on = false; clearTimeout(party.timer);
+  try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  wakeLock = null; render();
+}
+
+/* ---------- Battements au micro (bande 40-180 Hz) ---------- */
+let beat = null;
+async function startBeat() {
+  const stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  await ctx.resume();
+  const an = ctx.createAnalyser();
+  an.fftSize = 2048; an.smoothingTimeConstant = 0;
+  ctx.createMediaStreamSource(stream).connect(an);
+  const bins = new Float32Array(an.frequencyBinCount), hz = ctx.sampleRate / an.fftSize;
+  const lo = Math.max(1, Math.floor(40 / hz)), hi = Math.ceil(180 / hz), hist = [];
+  let last = 0;
+  beat = {ctx, stream, timer: null};
+  beat.timer = setInterval(() => {
+    an.getFloatFrequencyData(bins);
+    let e = 0;
+    for (let k = lo; k <= hi; k++) e += Math.pow(10, bins[k] / 10);
+    const now = performance.now();
+    if (hist.length >= 8) {
+      const avg = hist.reduce((a, b) => a + b, 0) / hist.length;
+      if (e > Number($('#sens').value) * avg && e > 1e-9 && now - last > 280) {
+        last = now; party.beats++;
+        if (party.on) nextColor();
+      }
+    }
+    hist.push(e); if (hist.length > 32) hist.shift();
+  }, 46);
+}
+function stopBeat() {
+  if (!beat) return;
+  clearInterval(beat.timer);
+  try { beat.stream.getTracks().forEach(t => t.stop()); beat.ctx.close(); } catch (e) {}
+  beat = null;
+}
+
+/* ---------- Affichage ---------- */
+function paintStage(rgb) { document.documentElement.style.setProperty('--c', `rgb(${rgb.join(',')})`); }
+function labels() {
+  const n = {};
+  for (const d of show.lights) n[d.name] = (n[d.name] || 0) + 1;
+  const seen = {};
+  for (const d of show.lights) d.label = n[d.name] > 1 ? `${d.name} (${seen[d.name] = (seen[d.name] || 0) + 1})` : d.name;
+}
+function render() {
+  const devs = all();
+  $('#devs').innerHTML = devs.length ? devs.map((d, i) => {
+    const st = d.connected ? (d.awake ? 'connecté' : 'connecté, mais muet') : (d.reconnecting ? 'reconnexion…' : 'déconnecté');
+    return `<div class="dev"><span class="dot ${d.connected ? (d.awake ? 'on' : 'mute') : ''}"></span>
+      <div class="who"><b>${esc(d.label)}</b><small>${d.kind === 'box' ? 'enceinte' : 'lumière'} · ${st}</small></div>
+      <button type="button" data-act="re" data-i="${i}" aria-label="Reconnecter ${esc(d.label)}">↻</button>
+      <button type="button" data-act="rm" data-i="${i}" aria-label="Retirer ${esc(d.label)}">✕</button></div>`;
+  }).join('') : '<p class="empty">Aucun appareil pour l\'instant.</p>';
+  $('#gbox').classList.toggle('off', !(show.box && show.box.connected));
+  $('#glight').classList.toggle('off', !show.lights.some(d => d.connected));
+  $('#party').textContent = party.on ? 'Arrêter le mode fête' : 'Lancer le mode fête';
+  document.querySelectorAll('#pat .chip').forEach(b => b.classList.toggle('sel', Number(b.dataset.p) === show.pattern));
+  const sel = $('#rawDev'), keep = sel.value;
+  sel.innerHTML = devs.map((d, i) => `<option value="${i}">${esc(d.label)}</option>`).join('');
+  if (keep && Number(keep) < devs.length) sel.value = keep;
+}
+
+/* ---------- Ajout des appareils ---------- */
+function storedKinds() { try { return JSON.parse(localStorage.getItem('jblsync.kinds') || '{}'); } catch (e) { return {}; } }
+function remember(d) { try { const k = storedKinds(); k[d.bt.id] = d.kind; localStorage.setItem('jblsync.kinds', JSON.stringify(k)); } catch (e) {} }
+const HOME_URL = 'https://damiennerri.github.io/party-sync/';
+const STUCK_TEXT = "La liste Bluetooth ne s'ouvre pas : le navigateur bloque le Bluetooth quand la page est affichée à l'intérieur d'une autre (comme dans Claude). Ouvre-la à sa propre adresse : " + HOME_URL.replace('https://', '');
+async function add(kind) {
+  if (!navigator.bluetooth) { msg(noBluetoothText()); return; }
+  if (party.on) stopParty();
+  const all_ = $('#all').checked;
+  log(`Ouverture de la liste Bluetooth (${kind === 'box' ? 'enceinte' : 'PartyLight'}, ${all_ ? 'tous les appareils' : 'filtre JBL/Party'})…`);
+  msg('Ouverture de la liste Bluetooth…');
+  let settled = false;
+  const watchdog = setTimeout(() => { if (!settled) { msg(STUCK_TEXT); log('Aucune réponse du navigateur au bout de 8 s.'); } }, 8000);
+  let bt;
+  try {   // requestDevice doit être appelé tout de suite après le toucher (pas d'await avant)
+    bt = await navigator.bluetooth.requestDevice(all_
+      ? {acceptAllDevices: true, optionalServices: [SERVICE]}
+      : {filters: [{namePrefix: 'JBL'}, {namePrefix: 'Party'}], optionalServices: [SERVICE]});
+  } catch (e) {
+    settled = true; clearTimeout(watchdog);
+    log(`Liste Bluetooth : ${e.name || 'erreur'} : ${e.message || e}`);
+    if (e.name === 'NotFoundError') msg("Aucun appareil choisi. S'il n'apparaît pas, coche « Montrer tous les appareils Bluetooth » et réessaie.");
+    else if (e.name === 'SecurityError' || /iframe|frame|policy|cadre/i.test(e.message || '')) msg(STUCK_TEXT);
+    else msg('Bluetooth : ' + explain(e));
+    return;
+  }
+  settled = true; clearTimeout(watchdog);
+  log(`Choisi : ${bt.name || '(sans nom)'}`);
+  await attach(bt, kind);
+}
+async function attach(bt, kind) {
+  if (all().some(d => d.bt.id === bt.id)) { msg(`${bt.name || 'Cet appareil'} est déjà dans la liste.`); return; }
+  const d = new Dev(bt, kind);
+  if (kind === 'box') { if (show.box) show.box.forget(); show.box = d; } else show.lights.push(d);
+  labels(); remember(d); render();
+  msg(`Connexion à ${d.label}…`);
+  try {
+    const awake = await d.connect();
+    msg(awake ? `${d.label} connecté.` : `${d.label} connecté mais il ne répond pas : l'appli JBL est-elle encore ouverte ? L'enceinte est-elle en veille ?`);
+    if (show.color) await setColor(show.color, null, [d]);   // le nouveau venu prend la couleur en cours
+  } catch (e) { msg(`${d.label} : connexion impossible (${explain(e)}).`); log(`${d.label} : ${explain(e)}`); }
+  render();
+}
+function noBluetoothText() {
+  return "Ce navigateur n'a pas le Bluetooth web. Android : ouvre cette page dans Chrome (ou Samsung Internet). iPhone : utilise l'appli Bluefy. Ordinateur : Chrome ou Edge.";
+}
+
+/* ---------- Boutons ---------- */
+$('#sw').innerHTML = COLORS.map(([n, c]) => `<button type="button" style="background:${hex(c)}" title="${n}" aria-label="${n}" data-c="${hex(c)}"></button>`).join('');
+$('#pat').innerHTML = PATTERNS.map(([, label, p]) => `<button class="chip" type="button" data-p="${p}">${label}</button>`).join('');
+const fromHex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+async function doColor(rgb) { stopParty(); msg(summary('Couleur ' + hex(rgb), await setColor(rgb))); }
+$('#sw').addEventListener('click', e => { const c = e.target.dataset.c; if (c) doColor(fromHex(c)); });
+$('#pick').addEventListener('change', e => doColor(fromHex(e.target.value)));
+$('#rand').addEventListener('click', () => doColor(PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)]));
+$('#pat').addEventListener('click', async e => {
+  const p = e.target.dataset.p;
+  if (p === undefined) return;
+  const res = await setPattern(Number(p));
+  render();
+  msg(summary('Motif ' + PNAMES[p], res));
+});
+$('#iv').addEventListener('input', e => { $('#ivv').textContent = e.target.value; });
+$('#party').addEventListener('click', () => { party.on ? stopParty() : startParty(); });
+$('#beat').addEventListener('change', async e => {
+  if (!e.target.checked) { stopBeat(); clearTimeout(party.timer); if (party.on) tick(); msg('Rythme désactivé.'); return; }
+  try {
+    await startBeat();
+    clearTimeout(party.timer);
+    msg('Micro actif : les couleurs changent sur les basses' + (party.on ? '.' : ' quand le mode fête tourne.'));
+  } catch (err) { e.target.checked = false; msg('Micro inaccessible : ' + explain(err)); }
+});
+$('#sp').addEventListener('input', e => { $('#spv').textContent = e.target.value; });
+$('#in').addEventListener('input', e => { $('#inv').textContent = e.target.value; });
+$('#sp').addEventListener('change', async e => msg(summary('Vitesse ' + e.target.value, await each(d => d.command(F.speed(e.target.value)), show.lights))));
+$('#in').addEventListener('change', async e => msg(summary('Intensité ' + e.target.value, await each(d => d.command(F.intensity(e.target.value)), show.lights))));
+document.querySelectorAll('[data-strobe]').forEach(b => b.addEventListener('click', async () => {
+  const on = b.dataset.strobe === '1';
+  msg(summary('Stroboscope ' + (on ? 'ON' : 'OFF'), show.box ? await each(d => d.command(F.strobe(on)), [show.box]) : []));
+}));
+$('#on').addEventListener('click', async () => msg(summary('Allumage', await power(true))));
+$('#off').addEventListener('click', async () => { stopParty(); msg(summary('Extinction', await power(false))); });
+$('#addBox').addEventListener('click', () => add('box'));
+$('#addLight').addEventListener('click', () => add('light'));
+$('#devs').addEventListener('click', async e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const d = all()[Number(b.dataset.i)];
+  if (!d) return;
+  if (b.dataset.act === 'rm') {
+    d.forget();
+    if (show.box === d) show.box = null; else show.lights = show.lights.filter(x => x !== d);
+    labels(); render(); msg(`${d.label} retiré.`);
+  } else {
+    d.removed = false;
+    try { try { d.bt.gatt.disconnect(); } catch (err) {} await d.connect(); msg(`${d.label} reconnecté.`); if (show.color) await setColor(show.color, null, [d]); }
+    catch (err) { msg(`${d.label} : ${explain(err)}`); }
+    render();
+  }
+});
+$('#rawSend').addEventListener('click', async () => {
+  const d = all()[Number($('#rawDev').value)];
+  const clean = $('#rawHex').value.replace(/[^0-9a-f]/gi, '');
+  if (!d) { msg("Ajoute d'abord un appareil."); return; }
+  if (!clean || clean.length % 2) { msg('Hexadécimal invalide (exemple : aa 31 00).'); return; }
+  const bytes = new Uint8Array(clean.match(/../g).map(x => parseInt(x, 16)));
+  try { const r = await d.exchange(bytes, () => true, 1500); msg(r ? `Réponse : ${toHex(frame(r[0], r[1]))}  (${rxText(r[0], r[1])})` : 'Envoyé, pas de réponse.'); }
+  catch (err) { msg('Erreur : ' + explain(err)); }
+});
+
+/* ---------- Démarrage ---------- */
+paintStage([150, 0, 255]);
+render();
+if (!navigator.bluetooth) {
+  $('#warn').hidden = false;
+  $('#warn').textContent = window.isSecureContext === false
+    ? "Le Bluetooth est bloqué sur cette adresse : le navigateur l'autorise seulement en https:// (ou sur un fichier ouvert directement). Voir le README."
+    : noBluetoothText();
+} else {
+  try {
+    navigator.bluetooth.getAvailability().then(ok => {
+      if (!ok) { $('#warn').hidden = false; $('#warn').textContent = 'Active le Bluetooth du téléphone, puis recharge la page.'; }
+    }).catch(() => {});
+  } catch (e) {}
+  if (navigator.bluetooth.getDevices) {
+    navigator.bluetooth.getDevices().then(list => {
+      const kinds = storedKinds();
+      for (const bt of list) if (kinds[bt.id] && !all().some(d => d.bt.id === bt.id)) {
+        const d = new Dev(bt, kinds[bt.id]);
+        if (d.kind === 'box') show.box = d; else show.lights.push(d);
+      }
+      labels(); render();
+      if (all().length) msg('Appareils déjà autorisés retrouvés : touche ↻ pour les reconnecter.');
+    }).catch(() => {});
+  }
+}
+{
+  let inFrame = true;
+  try { inFrame = window.self !== window.top; } catch (e) {}
+  const ua = navigator.userAgent || '';
+  if (inFrame && $('#warn').hidden) {
+    $('#warn').hidden = false;
+    $('#warn').innerHTML = `Ici, la page est affichée à l'intérieur d'une autre : le Bluetooth y est bloqué. Ouvre-la à sa propre adresse, dans Bluefy sur iPhone ou Chrome sur Android : <a href="${HOME_URL}" style="color:#fff">${HOME_URL.replace('https://', '')}</a>`;
+  }
+  log(`Diagnostic : Bluetooth web ${navigator.bluetooth ? 'présent' : 'absent'} · contexte sécurisé ${window.isSecureContext ? 'oui' : 'non'} · page dans un cadre ${inFrame ? 'oui' : 'non'} · ${/bluefy/i.test(ua) ? 'Bluefy' : ua.slice(0, 80)}`);
+}
+log('Prêt. Les trames envoyées (→) et reçues (←) s\'affichent ici.');
+}
+</script>
+</body>
+</html>

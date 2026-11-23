@@ -1,0 +1,4 @@
+bleak>=1.0
+# Optionnel, pour suivre le rythme au micro (party --beat) :
+# sounddevice
+# numpy
